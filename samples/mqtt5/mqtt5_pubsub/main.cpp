@@ -11,6 +11,7 @@
 
 #include "../../utils/CommandLineUtils.h"
 
+#include <iostream>
 #include <fstream>
 
 using namespace Aws::Crt;
@@ -219,6 +220,8 @@ int main(int argc, char *argv[])
                     } 
                     fname >> message;
                     fname.close();
+                    remove("mqtt5_send.txt");
+
                     ByteCursor payload = ByteCursorFromString(message);
 
                     std::shared_ptr<Mqtt5::PublishPacket> publish = std::make_shared<Mqtt5::PublishPacket>(
