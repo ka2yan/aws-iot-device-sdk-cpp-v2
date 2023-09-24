@@ -214,8 +214,8 @@ int main(int argc, char *argv[])
                     std::ifstream fname("mqtt5_send.txt");
                     if (!fname)
                     {
-                        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                        break;
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                        continue;
                     } 
                     fname >> message;
                     fname.close();
@@ -228,7 +228,7 @@ int main(int argc, char *argv[])
                         ++publishedCount;
                     }
 
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
 
                 {
