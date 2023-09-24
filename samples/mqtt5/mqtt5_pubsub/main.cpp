@@ -215,7 +215,7 @@ int main(int argc, char *argv[])
                     if (!fname)
                     {
                         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                        break;
+                        continue;
                     } 
                     fname >> message;
                     fname.close();
