@@ -210,18 +210,19 @@ int main(int argc, char *argv[])
                 while (publishedCount < cmdData.input_count)
                 {
                     // Add \" to 'JSON-ify' the message
-//                    String message = "\"" + cmdData.input_message + std::to_string(publishedCount + 1).c_str() + "\"";
-                    String message = "\n";
+                    String read_message = "\n";
                     std::ifstream fname("mqtt5_send.txt");
                     if (!fname)
                     {
                         std::this_thread::sleep_for(std::chrono::milliseconds(100));
                         continue;
                     } 
-                    fname >> message;
+                    fname >> read_message;
                     fname.close();
                     remove("mqtt5_send.txt");
 
+//                  String message = "\"" + cmdData.input_message + std::to_string(publishedCount + 1).c_str() + "\"";
+                    String message = "\"" + read_message + "\"";
                     ByteCursor payload = ByteCursorFromString(message);
 
                     std::shared_ptr<Mqtt5::PublishPacket> publish = std::make_shared<Mqtt5::PublishPacket>(
