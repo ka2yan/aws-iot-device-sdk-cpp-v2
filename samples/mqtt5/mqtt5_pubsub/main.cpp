@@ -11,6 +11,8 @@
 
 #include "../../utils/CommandLineUtils.h"
 
+#include <fstream>
+
 using namespace Aws::Crt;
 
 int main(int argc, char *argv[])
@@ -96,6 +98,13 @@ int main(int argc, char *argv[])
             fprintf(stdout, "Publish received on topic %s:", eventData.publishPacket->getTopic().c_str());
             fwrite(eventData.publishPacket->getPayload().ptr, 1, eventData.publishPacket->getPayload().len, stdout);
             fprintf(stdout, "\n");
+
+             std::ofstream fname("mqtt5_recv.txt");
+             if (fname)
+             {
+                 fname << eventData.publishPacket->getPayload().ptr;
+                 fname.close();
+             }
 
             for (Mqtt5::UserProperty prop : eventData.publishPacket->getUserProperties())
             {
@@ -200,7 +209,16 @@ int main(int argc, char *argv[])
                 while (publishedCount < cmdData.input_count)
                 {
                     // Add \" to 'JSON-ify' the message
-                    String message = "\"" + cmdData.input_message + std::to_string(publishedCount + 1).c_str() + "\"";
+//                    String message = "\"" + cmdData.input_message + std::to_string(publishedCount + 1).c_str() + "\"";
+                    String message = "\n";
+                    std::ifstream fname("mqtt5_send.txt");
+                    if (!fname)
+                    {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                        break;
+                    } 
+                    fname >> message;
+                    fname.close();
                     ByteCursor payload = ByteCursorFromString(message);
 
                     std::shared_ptr<Mqtt5::PublishPacket> publish = std::make_shared<Mqtt5::PublishPacket>(
