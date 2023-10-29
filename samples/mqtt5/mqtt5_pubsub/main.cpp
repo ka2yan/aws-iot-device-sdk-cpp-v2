@@ -11,9 +11,13 @@
 
 #include "../../utils/CommandLineUtils.h"
 
-#include <iostream>
-#include <fstream>
-#include <string>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+
+#define RECV_SOCKET_NAME "/tmp/aws_socket_rmsg"
+#define SEND_SOCKET_NAME "/tmp/aws_socket_smsg"
 
 using namespace Aws::Crt;
 
@@ -101,12 +105,31 @@ int main(int argc, char *argv[])
             fwrite(eventData.publishPacket->getPayload().ptr, 1, eventData.publishPacket->getPayload().len, stdout);
             fprintf(stdout, "\n");
 
-             std::ofstream fname("mqtt5_recv.txt");
-             if (fname)
-             {
-                 fname << eventData.publishPacket->getPayload().ptr;
-                 fname.close();
-             }
+            int client_sock;
+            struct sockaddr_un server_addr;
+            memset(&server_addr, 0, sizeof(server_addr));
+
+            client_sock = socket(AF_UNIX, SOCK_STREAM, 0);
+            if (client_sock > 0)
+            {
+                server_addr.sun_family = AF_UNIX;
+                strncpy(server_addr.sun_path, RECV_SOCKET_NAME, sizeof(server_addr.sun_path));
+                if (connect(client_sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) == 0)
+                {
+                    int len = strlen((const char *)eventData.publishPacket->getPayload().ptr);
+                    int nsend = send(client_sock, eventData.publishPacket->getPayload().ptr, len, 0);
+                    if(nsend == len) {
+                        fprintf(stdout, "send message to %s.\n", RECV_SOCKET_NAME);
+                    } else {
+                        fprintf(stdout, "send() failed(%d byte: %d).\n", nsend, errno);
+                    }
+                } else {
+                //    fprintf(stdout, "connect() failed(%d).\n", errno);
+                }
+                close(client_sock);
+            } else {
+                fprintf(stdout, "socket() failed(%d).\n", errno);
+            }
 
             for (Mqtt5::UserProperty prop : eventData.publishPacket->getUserProperties())
             {
@@ -207,34 +230,70 @@ int main(int argc, char *argv[])
                     };
                 };
 
+                int server_sock;
+                struct sockaddr_un server_addr;
+                memset(&server_addr, 0, sizeof(server_addr));
+
+                server_sock = socket(AF_UNIX, SOCK_STREAM, 0);
+                if (server_sock < 0)
+                {
+                    fprintf(stdout, "socket() failed(%d).\n", errno);
+                    exit(-1);
+                }
+                unlink(SEND_SOCKET_NAME);
+                server_addr.sun_family = AF_UNIX;
+                strncpy(server_addr.sun_path, SEND_SOCKET_NAME, sizeof(server_addr.sun_path));
+                if (bind(server_sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
+                {
+                    fprintf(stdout, "bind() failed(%d).\n", errno);
+                    exit(-1);
+                }
+                if (listen(server_sock, 5))
+                {
+                    fprintf(stdout, "listen() failed(%d).\n", errno);
+                    exit(-1);
+                }
+
                 uint32_t publishedCount = 0;
                 while (publishedCount < cmdData.input_count)
                 {
-                    // Add \" to 'JSON-ify' the message
-                    String read_message = "\n";
-                    std::ifstream fname("mqtt5_send.txt");
-                    if (!fname)
-                    {
-                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                        continue;
-                    } 
-                    std::getline(fname, read_message);
-                    fname.close();
-                    remove("mqtt5_send.txt");
+                    int client_sock;
+                    struct sockaddr_un client_addr;
+                    socklen_t len = sizeof(client_addr);
+                    char buffer[1024];
+                    int nrecv;
 
+                    memset(&client_addr, 0, sizeof(client_addr));
+                    client_sock = accept(server_sock, (struct sockaddr *)&client_addr, &len);
+                    if (client_sock < 0)
+                    {
+                        fprintf(stdout, "accept() failed(%d).\n", errno);
+                        ++publishedCount;
+                    }
+
+                    nrecv = recv(client_sock, buffer, sizeof(buffer), 0);
+                    if (nrecv < 0) {
+                        fprintf(stdout, "recv() failed(%d).\n", errno);
+                        close(client_sock);
+                        ++publishedCount;
+                    }
+
+                    // Add \" to 'JSON-ify' the message
 //                  String message = "\"" + cmdData.input_message + std::to_string(publishedCount + 1).c_str() + "\"";
-                    String message = "\"" + read_message + "\"";
+                    String message = "\"" + String(buffer) + "\"";
                     ByteCursor payload = ByteCursorFromString(message);
 
                     std::shared_ptr<Mqtt5::PublishPacket> publish = std::make_shared<Mqtt5::PublishPacket>(
                         cmdData.input_topic, payload, Mqtt5::QOS::AWS_MQTT5_QOS_AT_LEAST_ONCE);
                     if (client->Publish(publish, onPublishComplete))
                     {
+                        fprintf(stdout, "receive message from %s\n", SEND_SOCKET_NAME);
+                        close(client_sock);  // receive message one time
                         ++publishedCount;
                     }
-
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
+                close(server_sock);
+                unlink(SEND_SOCKET_NAME);
 
                 {
                     std::unique_lock<std::mutex> receivedLock(receiveMutex);
