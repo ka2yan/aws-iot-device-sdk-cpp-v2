@@ -269,6 +269,7 @@ int main(int argc, char *argv[])
                     {
                         fprintf(stdout, "accept() failed(%d).\n", errno);
                         ++publishedCount;
+                        continue;
                     }
 
                     nrecv = recv(client_sock, buffer, sizeof(buffer), 0);
@@ -276,6 +277,7 @@ int main(int argc, char *argv[])
                         fprintf(stdout, "recv() failed(%d).\n", errno);
                         close(client_sock);
                         ++publishedCount;
+                        continue;
                     }
 
                     // Add \" to 'JSON-ify' the message
