@@ -282,11 +282,14 @@ int main(int argc, char *argv[])
 
                     // Add \" to 'JSON-ify' the message
 //                  String message = "\"" + cmdData.input_message + std::to_string(publishedCount + 1).c_str() + "\"";
+                    Aws::Crt::String publish_topic = Aws::Crt::String("sdk/test/python");
                     String message = "\"" + String(buffer) + "\"";
                     ByteCursor payload = ByteCursorFromString(message);
 
+                    //std::shared_ptr<Mqtt5::PublishPacket> publish = std::make_shared<Mqtt5::PublishPacket>(
+                    //    cmdData.input_topic, payload, Mqtt5::QOS::AWS_MQTT5_QOS_AT_LEAST_ONCE);
                     std::shared_ptr<Mqtt5::PublishPacket> publish = std::make_shared<Mqtt5::PublishPacket>(
-                        cmdData.input_topic, payload, Mqtt5::QOS::AWS_MQTT5_QOS_AT_LEAST_ONCE);
+                        publish_topic, payload, Mqtt5::QOS::AWS_MQTT5_QOS_AT_LEAST_ONCE);
                     if (client->Publish(publish, onPublishComplete))
                     {
                         fprintf(stdout, "receive message from %s\n", SEND_SOCKET_NAME);
