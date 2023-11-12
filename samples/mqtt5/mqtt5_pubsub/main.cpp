@@ -272,13 +272,14 @@ int main(int argc, char *argv[])
                         continue;
                     }
 
-                    nrecv = recv(client_sock, buffer, sizeof(buffer), 0);
+                    nrecv = recv(client_sock, buffer, sizeof(buffer)-1, 0);
                     if (nrecv < 0) {
                         fprintf(stdout, "recv() failed(%d).\n", errno);
                         close(client_sock);
                         ++publishedCount;
                         continue;
                     }
+                    buffer[nrecv] = '\0';
 
                     // Add \" to 'JSON-ify' the message
 //                  String message = "\"" + cmdData.input_message + std::to_string(publishedCount + 1).c_str() + "\"";
