@@ -101,7 +101,7 @@ int main(int argc, char *argv[])
 
             std::lock_guard<std::mutex> lock(receiveMutex);
             ++receivedCount;
-            fprintf(stdout, "Publish received on topic %s:", eventData.publishPacket->getTopic().c_str());
+            fprintf(stdout, "Subscribe received on topic %s:", eventData.publishPacket->getTopic().c_str());
             fwrite(eventData.publishPacket->getPayload().ptr, 1, eventData.publishPacket->getPayload().len, stdout);
             fprintf(stdout, "\n");
 
@@ -262,6 +262,7 @@ int main(int argc, char *argv[])
                     socklen_t len = sizeof(client_addr);
                     char buffer[1024];
                     int nrecv;
+                    char *saveptr, *line1, *line2;
 
                     memset(&client_addr, 0, sizeof(client_addr));
                     client_sock = accept(server_sock, (struct sockaddr *)&client_addr, &len);
@@ -282,18 +283,28 @@ int main(int argc, char *argv[])
                     buffer[nrecv] = '\0';
 
                     // Add \" to 'JSON-ify' the message
-//                  String message = "\"" + cmdData.input_message + std::to_string(publishedCount + 1).c_str() + "\"";
-                    Aws::Crt::String publish_topic = Aws::Crt::String("sdk/test/python");
-                    String message = "\"" + String(buffer) + "\"";
+                    // String message = "\"" + cmdData.input_message + std::to_string(publishedCount + 1).c_str() + "\"";
+
+                    // message format:
+                    //   <topic>\n<message>
+                    line1 = strtok_r(buffer, "\n", &saveptr);
+                    line2 = strtok_r(NULL, "", &saveptr);
+                    if(!line1 || !line2) {
+                        fprintf(stdout, "Publish message format error.\nline1=%s\nline2=%s\n", line1, line2);
+                        close(client_sock);
+                        ++publishedCount;
+                        continue;
+                    }
+
+                    Aws::Crt::String publish_topic = Aws::Crt::String(line1);
+                    String message = String(line2);
                     ByteCursor payload = ByteCursorFromString(message);
 
-                    //std::shared_ptr<Mqtt5::PublishPacket> publish = std::make_shared<Mqtt5::PublishPacket>(
-                    //    cmdData.input_topic, payload, Mqtt5::QOS::AWS_MQTT5_QOS_AT_LEAST_ONCE);
                     std::shared_ptr<Mqtt5::PublishPacket> publish = std::make_shared<Mqtt5::PublishPacket>(
                         publish_topic, payload, Mqtt5::QOS::AWS_MQTT5_QOS_AT_LEAST_ONCE);
                     if (client->Publish(publish, onPublishComplete))
                     {
-                        fprintf(stdout, "receive message from %s\n", SEND_SOCKET_NAME);
+                        fprintf(stdout, "Publish Sending to topic %s:%s\n", line1, line2);
                         close(client_sock);  // receive message one time
                         ++publishedCount;
                     }
@@ -301,10 +312,12 @@ int main(int argc, char *argv[])
                 close(server_sock);
                 unlink(SEND_SOCKET_NAME);
 
+                #if 0   // This program does not need to wait, because Subscribe thread does not wait same topic.
                 {
                     std::unique_lock<std::mutex> receivedLock(receiveMutex);
                     receiveSignal.wait(receivedLock, [&] { return receivedCount >= cmdData.input_count; });
                 }
+                #endif
 
                 // Unsubscribe from the topic.
                 std::promise<void> unsubscribeFinishedPromise;
